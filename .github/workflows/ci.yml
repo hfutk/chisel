@@ -7,6 +7,9 @@ on:
 permissions:
   contents: read
 jobs:
+  # ================
+  # SPELLING CHECK
+  # ================
   codespell:
     name: Spelling
     runs-on: ubuntu-latest
@@ -16,6 +19,9 @@ jobs:
       - name: codespell
         uses: codespell-project/actions-codespell@v2
 
+  # ================
+  # BUILD AND TEST JOB
+  # ================
   test:
     name: Build & Test
     strategy:
@@ -34,17 +40,20 @@ jobs:
           go-version: ${{ matrix.go-version }}
           check-latest: true
       - name: Build
-        run: go build -v -o /dev/null .   # 测试阶段可以不用混淆，保持原样
+        run: go build -v -o /dev/null .
       - name: Test
         run: go test -v ./...
 
+  # ================
+  # RELEASE (garble build + GoReleaser packaging)
+  # ================
   release:
     name: Release
     needs: test
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write   # needed for creating GitHub Release
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -58,17 +67,88 @@ jobs:
           cache: true
 
       - name: Install garble
-        run: go install mvdan.cc/garble@latest
+        run: |
+          go install mvdan.cc/garble@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
 
-      - name: Add GOPATH/bin to PATH
-        run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+      - name: Verify garble
+        run: garble version
 
-      - name: Run GoReleaser (garble builds)
+      # 手动用 garble 交叉编译所有平台
+      # 输出文件名格式：chisel_<os>_<arch>[v<arm>][_<mips>]  (.exe on Windows)
+      - name: Build with garble (all platforms)
+        env:
+          CGO_ENABLED: 0
+          LDFLAGS: "-s -w -X github.com/jpillora/chisel/share.BuildVersion=${{ github.ref_name }}"
+        run: |
+          mkdir -p dist
+
+          # 定义完整的平台列表 (GOOS/GOARCH/GOARM/GOMIPS)
+          # 每一行格式：GOOS|GOARCH|GOARM|GOMIPS
+          # 注意：arm 版本必须指定 GOARM，mips 必须指定 GOMIPS
+          cat << 'EOF' > platforms.txt
+          linux|386||
+          linux|amd64||
+          linux|arm|5|
+          linux|arm|6|
+          linux|arm|7|
+          linux|arm64||
+          linux|ppc64||
+          linux|ppc64le||
+          linux|mips||hardfloat
+          linux|mips||softfloat
+          linux|mipsle||hardfloat
+          linux|mipsle||softfloat
+          linux|mips64||hardfloat
+          linux|mips64||softfloat
+          linux|mips64le||hardfloat
+          linux|mips64le||softfloat
+          linux|s390x||
+          darwin|amd64||
+          darwin|arm64||
+          windows|386||
+          windows|amd64||
+          windows|arm64||
+          openbsd|386||
+          openbsd|amd64||
+          openbsd|arm||
+          openbsd|arm64||
+          EOF
+
+          while IFS='|' read -r GOOS GOARCH GOARM GOMIPS; do
+            # 跳过空行和注释
+            [[ -z "$GOOS" || "$GOOS" == \#* ]] && continue
+
+            # 构造二进制文件名后缀
+            SUFFIX=""
+            [ -n "$GOARM" ] && SUFFIX="${SUFFIX}v${GOARM}"
+            [ -n "$GOMIPS" ] && SUFFIX="${SUFFIX}_${GOMIPS}"
+
+            # 输出文件名
+            BINARY_NAME="chisel_${GOOS}_${GOARCH}${SUFFIX}"
+            OUTPUT="dist/${BINARY_NAME}"
+            [ "$GOOS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
+
+            echo "--> Building $GOOS/$GOARCH (arm=$GOARM, mips=$GOMIPS)"
+            export GOOS GOARCH GOARM GOMIPS
+            garble -tiny build \
+              -trimpath \
+              -ldflags="$LDFLAGS" \
+              -o "$OUTPUT" \
+              .
+          done < platforms.txt
+
+          # 展示构建产物
+          ls -la dist/
+
+      # 使用 GoReleaser 进行打包（deb/rpm/apk）、归档、校验和、发布
+      # --skip=build 告诉 GoReleaser 二进制已经存在，不要自己构建
+      - name: Run GoReleaser (pack & release)
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: v2.17.0
-          args: release --clean --skip=docker --config .github/goreleaser.yml
+          args: release --clean --skip=build --config .github/goreleaser.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
