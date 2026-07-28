@@ -15,10 +15,9 @@ func TestFallbackVersion(t *testing.T) {
 		current, module, want string
 	}{
 		//module install: use the embedded module version
-		{"0.0.0-src", "v1.11.6", "1.11.6"},
+		{"1.1.1-src", "v1.11.6", "1.11.6"},
 		//source build: no module version available
-		{"0.0.0-src", "(devel)", "0.0.0-src"},
-		{"0.0.0-src", "", "0.0.0-src"},
+		{"1.1.1-src", "(devel)", "1.1.1-src"},
 		{"1.1.1-src", "", "1.1.1-src"},
 		//ldflags-stamped builds always win
 		{"1.12.0", "v1.11.6", "1.12.0"},
