@@ -7,9 +7,6 @@ on:
 permissions:
   contents: read
 jobs:
-  # ================
-  # SPELLING CHECK
-  # ================
   codespell:
     name: Spelling
     runs-on: ubuntu-latest
@@ -19,9 +16,6 @@ jobs:
       - name: codespell
         uses: codespell-project/actions-codespell@v2
 
-  # ================
-  # BUILD AND TEST JOB
-  # ================
   test:
     name: Build & Test
     strategy:
@@ -40,13 +34,10 @@ jobs:
           go-version: ${{ matrix.go-version }}
           check-latest: true
       - name: Build
-        run: go build -v -o /dev/null .
+        run: go build -v -o /dev/null .   # 测试阶段可以不用混淆，保持原样
       - name: Test
         run: go test -v ./...
 
-  # ================
-  # RELEASE (no Docker — binaries only)
-  # ================
   release:
     name: Release
     needs: test
@@ -66,7 +57,10 @@ jobs:
           go-version: stable
           cache: true
 
-      - name: Run GoReleaser (binaries only)
+      - name: Install garble
+        run: go install mvdan.cc/garble@latest
+
+      - name: Run GoReleaser (garble builds)
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
