@@ -29,7 +29,7 @@ func TestPreAuthOversizedFrame(t *testing.T) {
 	//raw websocket connection with the chisel subprotocol, no ssh
 	ws, _, err := (&websocket.Dialer{
 		HandshakeTimeout: 5 * time.Second,
-		Subprotocols:     []string{"chisel-v3"},
+		Subprotocols:     []string{"chiseell"},
 	}).Dial("ws://127.0.0.1:"+port, http.Header{})
 	if err != nil {
 		t.Fatal(err)
