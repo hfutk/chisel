@@ -19,6 +19,7 @@ func TestFallbackVersion(t *testing.T) {
 		//source build: no module version available
 		{"0.0.0-src", "(devel)", "0.0.0-src"},
 		{"0.0.0-src", "", "0.0.0-src"},
+		{"1.1.1-src", "", "1.1.1-src"},
 		//ldflags-stamped builds always win
 		{"1.12.0", "v1.11.6", "1.12.0"},
 	} {
