@@ -60,6 +60,9 @@ jobs:
       - name: Install garble
         run: go install mvdan.cc/garble@latest
 
+      - name: Add GOPATH/bin to PATH
+        run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
       - name: Run GoReleaser (garble builds)
         uses: goreleaser/goreleaser-action@v6
         with:
