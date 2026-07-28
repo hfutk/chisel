@@ -1,48 +1,30 @@
-# test this file with
-#   goreleaser release --config .github/goreleaser.yml --clean --snapshot
+# GoReleaser v2 configuration
+# 构建由 CI 手动完成（garble），此处只负责打包和发布
 version: 2
+
+# 关闭默认构建，因为二进制已由 CI 生成到 dist/
 builds:
-  - builder: garble            # ✅ 改用 garble 混淆编译
-    env:
-      - CGO_ENABLED=0
-    ldflags:
-      - -s -w -X github.com/jpillora/chisel/share.BuildVersion={{.Version}}
-    flags:
-      - -trimpath
-    goos:
-      - linux
-      - darwin
-      - windows
-      - openbsd
-    goarch:
-      - "386"
-      - amd64
-      - arm
-      - arm64
-      - ppc64
-      - ppc64le
-      - mips
-      - mipsle
-      - mips64
-      - mips64le
-      - s390x
-    goarm:
-      - "5"
-      - "6"
-      - "7"
-    gomips:
-      - hardfloat
-      - softfloat
-    ignore:
-      # https://github.com/golang/go/issues/70705
-      - goos: windows
-        goarch: arm
+  - id: chisel
+    skip: true
+    # 告诉 GoReleaser 如何找到编译好的二进制文件
+    binary: >-
+      chisel_{{ .Os }}_{{ .Arch }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+      {{- if .Mips }}_{{ .Mips }}{{ end }}
+
+# 系统包：deb, rpm, apk
 nfpms:
   - maintainer: "https://github.com/jpillora"
     formats:
       - deb
       - rpm
       - apk
+    # 包内的二进制文件名保持一致
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}"
+    builds:
+      - chisel
+
+# 归档：.tar.gz / .zip
 archives:
   - formats:
       - gz
@@ -51,13 +33,20 @@ archives:
         formats: [zip]
     files:
       - none*
+    # 告诉归档器使用哪个 build 定义
+    builds:
+      - chisel
+
 release:
   draft: true
   replace_existing_draft: true
   prerelease: auto
+
 changelog:
   sort: asc
   filters:
     exclude:
       - "^docs:"
       - "^test:"
+
+# 不再包含任何 Docker 相关内容
