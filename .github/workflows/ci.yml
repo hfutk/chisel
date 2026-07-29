@@ -148,7 +148,7 @@ jobs:
         with:
           distribution: goreleaser
           version: v2.17.0
-          args: release --clean --skip=build --config .github/goreleaser.yml
+          args: release --clean --config .github/goreleaser.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
