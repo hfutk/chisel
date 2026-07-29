@@ -74,13 +74,12 @@ jobs:
       - name: Verify garble
         run: garble version
 
-      # 手动清理并创建 dist 目录
-      - name: Prepare dist directory
+      - name: Prepare build output directory
         run: |
-          rm -rf dist
-          mkdir -p dist
+          rm -rf build-output
+          mkdir -p build-output
 
-      # 手动用 garble 交叉编译所有平台
+      # 手动用 garble 交叉编译所有平台，输出到 build-output/
       - name: Build with garble (all platforms)
         env:
           CGO_ENABLED: 0
@@ -124,7 +123,7 @@ jobs:
             [ -n "$GOMIPS" ] && SUFFIX="${SUFFIX}_${GOMIPS}"
 
             BINARY_NAME="chisel_${GOOS}_${GOARCH}${SUFFIX}"
-            OUTPUT="dist/${BINARY_NAME}"
+            OUTPUT="build-output/${BINARY_NAME}"
             [ "$GOOS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
 
             echo "--> Building $GOOS/$GOARCH (arm=$GOARM, mips=$GOMIPS)"
@@ -139,16 +138,17 @@ jobs:
           # 清理临时文件
           rm -f platforms.txt
 
-          # 展示构建产物
-          ls -la dist/
+          # 展示产物
+          ls -la build-output/
 
-      # 运行 GoReleaser（不加 --clean，因为 dist/ 已经是准备好的）
+      # 运行 GoReleaser 进行打包与发布
+      # --clean 清空 dist/，然后 before hook 将 build-output/ 文件拷贝进去
       - name: Run GoReleaser (pack & release)
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: v2.17.0
-          args: release --config .github/goreleaser.yml
+          args: release --clean --config .github/goreleaser.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
