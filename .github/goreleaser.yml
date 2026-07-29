@@ -2,29 +2,24 @@
 # 构建由 CI 手动完成（garble），此处只负责打包和发布
 version: 2
 
-# 关闭默认构建，因为二进制已由 CI 生成到 dist/
 builds:
   - id: chisel
     skip: true
-    # 告诉 GoReleaser 如何找到编译好的二进制文件
+    # 二进制文件名模板（与 CI 中 garble 输出的名称一致）
     binary: >-
       chisel_{{ .Os }}_{{ .Arch }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
       {{- if .Mips }}_{{ .Mips }}{{ end }}
 
-# 系统包：deb, rpm, apk
 nfpms:
   - maintainer: "https://github.com/jpillora"
     formats:
       - deb
       - rpm
       - apk
-    # 包内的二进制文件名保持一致
+    # 包文件名模板
     file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}"
-    builds:
-      - chisel
 
-# 归档：.tar.gz / .zip
 archives:
   - formats:
       - gz
@@ -33,9 +28,6 @@ archives:
         formats: [zip]
     files:
       - none*
-    # 告诉归档器使用哪个 build 定义
-    builds:
-      - chisel
 
 release:
   draft: true
@@ -48,5 +40,3 @@ changelog:
     exclude:
       - "^docs:"
       - "^test:"
-
-# 不再包含任何 Docker 相关内容
