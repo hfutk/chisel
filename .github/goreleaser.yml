@@ -1,16 +1,13 @@
-# GoReleaser v2 configuration
-# 构建由 CI 手动完成（garble），此处只负责打包和发布
 version: 2
 
-# 在构建步骤前将 garble 预编译的二进制复制到 dist/
+# 将外部预编译好的二进制文件在构建开始前复制到 dist/
 before:
   hooks:
-    - cp -r build-output/* dist/
+    - cp -r /tmp/build-output/* dist/
 
 builds:
   - id: chisel
     skip: true
-    # 二进制文件名模板（与 garble 输出的名称严格一致）
     binary: >-
       chisel_{{ .Os }}_{{ .Arch }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
@@ -22,7 +19,6 @@ nfpms:
       - deb
       - rpm
       - apk
-    # 包文件名模板（与二进制名同步）
     file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}"
 
 archives:
