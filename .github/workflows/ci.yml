@@ -7,9 +7,6 @@ on:
 permissions:
   contents: read
 jobs:
-  # ================
-  # SPELLING CHECK
-  # ================
   codespell:
     name: Spelling
     runs-on: ubuntu-latest
@@ -19,9 +16,6 @@ jobs:
       - name: codespell
         uses: codespell-project/actions-codespell@v2
 
-  # ================
-  # BUILD AND TEST JOB
-  # ================
   test:
     name: Build & Test
     strategy:
@@ -44,16 +38,13 @@ jobs:
       - name: Test
         run: go test -v ./...
 
-  # ================
-  # RELEASE (garble build + GoReleaser packaging)
-  # ================
   release:
     name: Release
     needs: test
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # needed for creating GitHub Release
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -74,19 +65,17 @@ jobs:
       - name: Verify garble
         run: garble version
 
-      - name: Prepare build output directory
+      - name: Prepare build output directory (outside repo)
         run: |
-          rm -rf build-output
-          mkdir -p build-output
+          rm -rf /tmp/build-output
+          mkdir -p /tmp/build-output
 
-      # 手动用 garble 交叉编译所有平台，输出到 build-output/
       - name: Build with garble (all platforms)
         env:
           CGO_ENABLED: 0
           LDFLAGS: "-s -w -X github.com/jpillora/chisel/share.BuildVersion=${{ github.ref_name }}"
         run: |
-          # 定义完整的平台列表 (GOOS|GOARCH|GOARM|GOMIPS)
-          cat << 'EOF' > platforms.txt
+          cat << 'EOF' > /tmp/platforms.txt
           linux|386||
           linux|amd64||
           linux|arm|5|
@@ -123,7 +112,7 @@ jobs:
             [ -n "$GOMIPS" ] && SUFFIX="${SUFFIX}_${GOMIPS}"
 
             BINARY_NAME="chisel_${GOOS}_${GOARCH}${SUFFIX}"
-            OUTPUT="build-output/${BINARY_NAME}"
+            OUTPUT="/tmp/build-output/${BINARY_NAME}"
             [ "$GOOS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
 
             echo "--> Building $GOOS/$GOARCH (arm=$GOARM, mips=$GOMIPS)"
@@ -133,16 +122,11 @@ jobs:
               -ldflags="$LDFLAGS" \
               -o "$OUTPUT" \
               .
-          done < platforms.txt
+          done < /tmp/platforms.txt
 
-          # 清理临时文件
-          rm -f platforms.txt
+          rm -f /tmp/platforms.txt
+          ls -la /tmp/build-output/
 
-          # 展示产物
-          ls -la build-output/
-
-      # 运行 GoReleaser 进行打包与发布
-      # --clean 清空 dist/，然后 before hook 将 build-output/ 文件拷贝进去
       - name: Run GoReleaser (pack & release)
         uses: goreleaser/goreleaser-action@v6
         with:
