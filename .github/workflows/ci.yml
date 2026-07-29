@@ -74,18 +74,19 @@ jobs:
       - name: Verify garble
         run: garble version
 
+      # 手动清理并创建 dist 目录
+      - name: Prepare dist directory
+        run: |
+          rm -rf dist
+          mkdir -p dist
+
       # 手动用 garble 交叉编译所有平台
-      # 输出文件名格式：chisel_<os>_<arch>[v<arm>][_<mips>]  (.exe on Windows)
       - name: Build with garble (all platforms)
         env:
           CGO_ENABLED: 0
           LDFLAGS: "-s -w -X github.com/jpillora/chisel/share.BuildVersion=${{ github.ref_name }}"
         run: |
-          mkdir -p dist
-
-          # 定义完整的平台列表 (GOOS/GOARCH/GOARM/GOMIPS)
-          # 每一行格式：GOOS|GOARCH|GOARM|GOMIPS
-          # 注意：arm 版本必须指定 GOARM，mips 必须指定 GOMIPS
+          # 定义完整的平台列表 (GOOS|GOARCH|GOARM|GOMIPS)
           cat << 'EOF' > platforms.txt
           linux|386||
           linux|amd64||
@@ -116,15 +117,12 @@ jobs:
           EOF
 
           while IFS='|' read -r GOOS GOARCH GOARM GOMIPS; do
-            # 跳过空行和注释
             [[ -z "$GOOS" || "$GOOS" == \#* ]] && continue
 
-            # 构造二进制文件名后缀
             SUFFIX=""
             [ -n "$GOARM" ] && SUFFIX="${SUFFIX}v${GOARM}"
             [ -n "$GOMIPS" ] && SUFFIX="${SUFFIX}_${GOMIPS}"
 
-            # 输出文件名
             BINARY_NAME="chisel_${GOOS}_${GOARCH}${SUFFIX}"
             OUTPUT="dist/${BINARY_NAME}"
             [ "$GOOS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
@@ -138,19 +136,19 @@ jobs:
               .
           done < platforms.txt
 
+          # 清理临时文件
           rm -f platforms.txt
 
           # 展示构建产物
           ls -la dist/
 
-      # 使用 GoReleaser 进行打包（deb/rpm/apk）、归档、校验和、发布
-      # --skip=build 告诉 GoReleaser 二进制已经存在，不要自己构建
+      # 运行 GoReleaser（不加 --clean，因为 dist/ 已经是准备好的）
       - name: Run GoReleaser (pack & release)
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: v2.17.0
-          args: release --clean --config .github/goreleaser.yml
+          args: release --config .github/goreleaser.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
