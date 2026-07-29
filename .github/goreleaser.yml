@@ -1,9 +1,8 @@
 version: 2
 
-# 将外部预编译好的二进制文件在构建开始前复制到 dist/
 before:
   hooks:
-    - cp -r /tmp/build-output/* dist/
+    - /bin/sh -c 'cp /tmp/build-output/* dist/'
 
 builds:
   - id: chisel
