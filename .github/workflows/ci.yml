@@ -138,6 +138,8 @@ jobs:
               .
           done < platforms.txt
 
+          rm -f platforms.txt
+
           # 展示构建产物
           ls -la dist/
 
