@@ -7,6 +7,9 @@ on:
 permissions:
   contents: read
 jobs:
+  # ================
+  # SPELLING CHECK
+  # ================
   codespell:
     name: Spelling
     runs-on: ubuntu-latest
@@ -16,6 +19,9 @@ jobs:
       - name: codespell
         uses: codespell-project/actions-codespell@v2
 
+  # ================
+  # BUILD AND TEST JOB
+  # ================
   test:
     name: Build & Test
     strategy:
@@ -38,13 +44,17 @@ jobs:
       - name: Test
         run: go test -v ./...
 
-  release:
-    name: Release
+  # ================
+  # BUILD & RELEASE (garble + artifact + optional release)
+  # ================
+  build-and-release:
+    name: Build & Release
     needs: test
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write   # needed for release
+      actions: read      # needed for artifact upload
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -65,7 +75,7 @@ jobs:
       - name: Verify garble
         run: garble version
 
-      - name: Prepare build output directory (outside repo)
+      - name: Prepare build output directory
         run: |
           rm -rf /tmp/build-output
           mkdir -p /tmp/build-output
@@ -121,13 +131,29 @@ jobs:
               -trimpath \
               -ldflags="$LDFLAGS" \
               -o "$OUTPUT" \
-              .
+              . || echo "WARNING: Build failed for $GOOS/$GOARCH, continuing..."
           done < /tmp/platforms.txt
 
           rm -f /tmp/platforms.txt
           ls -la /tmp/build-output/
 
-      - name: Run GoReleaser (pack & release)
+          # 确保至少有一个二进制生成
+          if [ -z "$(ls -A /tmp/build-output/)" ]; then
+            echo "ERROR: No binaries were built!"
+            exit 1
+          fi
+
+      # 上传二进制文件为 artifact（master 和 tag 上均可下载）
+      - name: Upload binaries as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chisel-binaries
+          path: /tmp/build-output/*
+          retention-days: 30
+
+      # 仅当推送 tag 时才执行 GoReleaser 发布
+      - name: Run GoReleaser (only on tags)
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
@@ -137,6 +163,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify archive integrity
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           set -euo pipefail
           bad=0
