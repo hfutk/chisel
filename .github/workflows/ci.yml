@@ -151,28 +151,78 @@ jobs:
           path: /tmp/build-output/*
           retention-days: 30
 
-      # 仅当推送 tag 时才执行 GoReleaser 发布
-      - name: Run GoReleaser (only on tags)
+      # 仅当推送 tag 时才打包并发布 GitHub Release
+      # 说明：此前使用 GoReleaser（--clean + before 钩子拷贝预编译产物），
+      # 钩子在 goreleaser 清空 dist 后又重新填充 dist，导致
+      # "dist is not empty" 校验失败。现改为 shell 打包
+      # （与上游 jpillora/chisel 发布风格一致：unix .gz / windows .zip）
+      # + checksums.txt + 完整性校验 + gh CLI 创建/更新 Release，简单稳定。
+      - name: Package release archives (only on tags)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: v2.17.0
-          args: release --clean --config .github/goreleaser.yml
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG_NAME#v}"
+          rm -rf dist
+          mkdir -p dist
+          shopt -s nullglob
+          cd /tmp/build-output
+          for f in *; do
+            base="${f%.exe}"
+            case "$f" in
+              *.exe)
+                echo "--> Packing ${base}.zip"
+                zip -q -j "${GITHUB_WORKSPACE}/dist/chisel_${VERSION}_${base}.zip" "$f"
+                ;;
+              *)
+                echo "--> Packing ${f}.gz"
+                gzip -c "$f" > "${GITHUB_WORKSPACE}/dist/chisel_${VERSION}_${f}.gz"
+                ;;
+            esac
+          done
+          cd "${GITHUB_WORKSPACE}/dist"
+          archives=(*.gz *.zip)
+          if [ "${#archives[@]}" -eq 0 ]; then
+            echo "ERROR: no archives were produced!"
+            exit 1
+          fi
+          echo "--> Generating checksums.txt (${#archives[@]} archives)"
+          sha256sum "${archives[@]}" > checksums.txt
+          ls -la
 
-      - name: Verify archive integrity
+      - name: Verify archive integrity (only on tags)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           set -euo pipefail
           bad=0
+          shopt -s nullglob
           for f in dist/*.gz dist/*.zip; do
-            [ -e "$f" ] || continue
             case "$f" in
               *.gz)  gzip -t "$f" || { echo "CORRUPT: $f"; bad=1; } ;;
               *.zip) unzip -t "$f" >/dev/null || { echo "CORRUPT: $f"; bad=1; } ;;
             esac
           done
-          [ "$bad" = 0 ] && echo "all archives verified"
+          if [ "$bad" = 0 ]; then
+            echo "all archives verified"
+          fi
           exit "$bad"
+
+      - name: Create GitHub Release and upload assets (only on tags)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release ${TAG_NAME} already exists, uploading assets with --clobber"
+            gh release upload "$TAG_NAME" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG_NAME" dist/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG_NAME" \
+              --generate-notes \
+              --verify-tag
+          fi
+          echo "Release URL: $(gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" --json url -q .url)"
