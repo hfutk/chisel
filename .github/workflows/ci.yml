@@ -170,14 +170,16 @@ jobs:
           cd /tmp/build-output
           for f in *; do
             base="${f%.exe}"
+            base="${base#chisel_}"
             case "$f" in
               *.exe)
                 echo "--> Packing ${base}.zip"
                 zip -q -j "${GITHUB_WORKSPACE}/dist/chisel_${VERSION}_${base}.zip" "$f"
                 ;;
               *)
-                echo "--> Packing ${f}.gz"
-                gzip -c "$f" > "${GITHUB_WORKSPACE}/dist/chisel_${VERSION}_${f}.gz"
+                name="${f#chisel_}"
+                echo "--> Packing ${name}.gz"
+                gzip -c "$f" > "${GITHUB_WORKSPACE}/dist/chisel_${VERSION}_${name}.gz"
                 ;;
             esac
           done
