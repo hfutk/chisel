@@ -2,7 +2,7 @@ version: 2
 
 before:
   hooks:
-    - /bin/sh -c 'cp /tmp/build-output/* dist/'
+    - /bin/sh -c 'mkdir -p dist && cp /tmp/build-output/* dist/'
 
 builds:
   - id: chisel
@@ -31,7 +31,6 @@ archives:
 
 release:
   draft: false
-  replace_existing_draft: true
   prerelease: auto
 
 changelog:
