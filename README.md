@@ -582,3 +582,24 @@ Four changes may require action when upgrading from 1.11.x or earlier:
 ## License
 
 [MIT](https://github.com/jpillora/chisel/blob/master/LICENSE) © Jaime Pillora
+
+### Supplying arguments via stdin
+
+`chisel` can also take its command line arguments from stdin. Set
+`CHISEL_ARGS_STDIN=1` and pipe the arguments in: each non-empty line becomes
+one argument (single-line input is split on whitespace). The arguments are
+spliced into `os.Args` during package init, before any flag parsing:
+
+```bash
+$ printf 'client\n--auth\nuser:pass\nexample.com:8080\nR:9000:localhost:80\n' | CHISEL_ARGS_STDIN=1 chisel
+# same as: chisel client --auth user:pass example.com:8080 R:9000:localhost:80
+```
+
+Arguments passed on the real command line are appended after the
+stdin-supplied ones, so repeated flags may still override stdin values.
+
+> **Note:** this is opt-in precisely so it never conflicts with chisel's
+> stdin/stdout tunnel transports (stdio remotes / `ssh -o ProxyCommand`
+> mode). Do not set `CHISEL_ARGS_STDIN` for processes whose stdin carries
+> tunnel data, because the argument reader consumes stdin at startup.
+
